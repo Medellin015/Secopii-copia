@@ -101,6 +101,7 @@
     color:var(--ink);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
   .btn-xlsx:hover:not(:disabled){border-color:var(--ok);color:var(--ok)}
   .btn-xlsx:disabled{opacity:.55;cursor:default}
+  .xlsx-note{flex-basis:100%;text-align:right;font-size:11.5px;color:var(--gold)}
   .sortwrap select{height:38px;border:1.5px solid var(--line-2);border-radius:8px;padding:0 10px;
     font-family:inherit;font-size:13px;background:var(--paper);color:var(--text)}
   .sortwrap select:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
@@ -191,8 +192,7 @@
         <h1 class="title">Buscador de Contratos <span class="em">SECOP&nbsp;II</span></h1>
       </div>
     </div>
-    <p class="hero-sub">Consulta los contratos electrónicos celebrados en Colombia. Filtra por los mismos
-    diez campos del informe SECOP&nbsp;II — directo desde el registro nacional.</p>
+    <p class="hero-sub">Consulta los contratos electrónicos celebrados en Colombia.</p>
     <div class="counter">
       <span class="dot"></span>
       <span class="big" id="total">—</span>
@@ -275,6 +275,7 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
       Descargar Excel
     </button>
+    <span class="xlsx-note">⚠ La descarga incluye máximo 5.000 registros.</span>
   </div>
 </div>
 
@@ -393,18 +394,33 @@
       p.push(F.fechaFirma+" >= '"+yy+"-01-01T00:00:00' and "+F.fechaFirma+" < '"+(yy+1)+"-01-01T00:00:00'"); }
     return p.join(" and ");
   }
-  function orderBy(){                     /* siempre por fecha de firma, más reciente primero */
-    return (F && F.fechaFirma)? F.fechaFirma+" desc" : "";
+  /* orden: siempre por fecha de firma (más reciente primero) y los contratos
+     SIN fecha de firma al final. coalesce empuja los vacíos a una fecha muy
+     antigua; si el servidor no soporta coalesce, se usa el orden simple. */
+  function orderCandidates(){
+    if(!(F && F.fechaFirma)) return [""];
+    var f=F.fechaFirma;
+    return ["coalesce("+f+",'1111-01-01T00:00:00') desc", f+" desc"];
   }
-  /* estrategias que se prueban en orden si el servidor responde 400 */
+  /* estrategias de respaldo (orden × tipo de filtro) que se prueban ante 400 */
   var WHERE_OPTS=[{lower:true,idNumeric:true},{lower:true,idNumeric:false},{lower:false,idNumeric:false}];
+  function buildStrategies(){
+    var s=[]; orderCandidates().forEach(function(ord){
+      WHERE_OPTS.forEach(function(opts){ s.push({ord:ord, opts:opts}); });
+    }); return s;
+  }
+  function tryStrategies(attempt){
+    return buildStrategies().reduce(function(promise, st, i){
+      return i===0 ? attempt(st) : promise.catch(function(){ return attempt(st); });
+    }, null);
+  }
   function fetchPage(a, idx, withCount){
-    var off=idx*PAGE, ord=orderBy();
-    function attempt(opts){
-      var w=buildWhere(a,opts);
+    var off=idx*PAGE;
+    function attempt(st){
+      var w=buildWhere(a,st.opts);
       var dataUrl=API+"?$limit="+PAGE+"&$offset="+off;
       if(w) dataUrl+="&$where="+encodeURIComponent(w);
-      if(ord) dataUrl+="&$order="+encodeURIComponent(ord);
+      if(st.ord) dataUrl+="&$order="+encodeURIComponent(st.ord);
       var pData=fetch(dataUrl).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
       if(!withCount) return pData.then(function(arr){ return {value:arr}; });
       var cntUrl=API+"?$select="+encodeURIComponent("count(1) as cnt")+(w? "&$where="+encodeURIComponent(w):"");
@@ -415,9 +431,7 @@
         return out;
       });
     }
-    return WHERE_OPTS.reduce(function(promise, opts, i){
-      return i===0 ? attempt(opts) : promise.catch(function(){ return attempt(opts); });
-    }, null);
+    return tryStrategies(attempt);
   }
 
   /* ===== descarga a Excel ===== */
@@ -434,17 +448,14 @@
   ];
   /* trae solo datos (sin conteo) en lotes grandes, con la misma lógica de respaldo */
   function fetchRows(a, offset, limit){
-    var ord=orderBy();
-    function attempt(opts){
-      var w=buildWhere(a,opts);
+    function attempt(st){
+      var w=buildWhere(a,st.opts);
       var url=API+"?$limit="+limit+"&$offset="+offset;
       if(w) url+="&$where="+encodeURIComponent(w);
-      if(ord) url+="&$order="+encodeURIComponent(ord);
+      if(st.ord) url+="&$order="+encodeURIComponent(st.ord);
       return fetch(url).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
     }
-    return WHERE_OPTS.reduce(function(promise, opts, i){
-      return i===0 ? attempt(opts) : promise.catch(function(){ return attempt(opts); });
-    }, null);
+    return tryStrategies(attempt);
   }
   function buildRecords(allRows){
     return allRows.map(function(row){
