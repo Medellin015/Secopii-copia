@@ -7,6 +7,10 @@
   var API = "https://www.datos.gov.co/resource/jbjy-vk9h.json";
   var PAGE = 20;
 
+  /* documentos de proveedor restringidos: no se pueden buscar y se excluyen
+     de todos los resultados (filtro != en el lado del servidor, SoQL válido). */
+  var BLOCKED_DOCS = ["1128272022"];
+
   /* candidatos por campo lógico (se resuelven contra una fila de muestra) */
   var FIELD_CANDIDATES = {
     entidad:      ["nombre_entidad","nombre_de_la_entidad","nombreentidad","entidad"],
@@ -101,6 +105,12 @@
     if(a.mod && F.modalidad) p.push(F.modalidad+" = '"+esc(a.mod)+"'");
     if(a.anio && F.fechaFirma){ var yy=parseInt(a.anio,10);
       p.push(F.fechaFirma+" >= '"+yy+"-01-01T00:00:00' and "+F.fechaFirma+" < '"+(yy+1)+"-01-01T00:00:00'"); }
+    if(F.docProveedor){                  /* excluir proveedores restringidos */
+      BLOCKED_DOCS.forEach(function(doc){
+        if(opts.idNumeric && /^[0-9]+$/.test(doc)) p.push(F.docProveedor+" != "+doc);
+        else p.push(F.docProveedor+" != '"+esc(doc)+"'");
+      });
+    }
     return p.join(" and ");
   }
   /* orden: siempre por fecha de firma (más reciente primero) y los contratos
@@ -204,6 +214,7 @@
   function downloadExcel(){
     if(!F || xlsBusy) return;
     var a=active||readForm();
+    if(isBlocked(a)){ showBlocked(); return; }
     xlsBusy=true; setXlsBusy(true);
     var all=[];
     function loop(offset){
@@ -351,7 +362,20 @@
   }
   var INPUT_IDS=["f_nitEnt","f_nomEnt","f_objeto","f_ref","f_desc","f_nitProv","f_nomProv","f_nitRep","f_mod","f_anio"];
 
-  $("form").addEventListener("submit", function(e){ e.preventDefault(); if(!F) return; runQuery(readForm()); });
+  function showBlocked(){
+    active=null; rows=[]; count=null; error=null; loading=false; done=true;
+    setBtnLoading(false);
+    rcount.textContent="Búsqueda no permitida";
+    rsub.textContent="Este proveedor está restringido";
+    list.innerHTML='<div class="state"><div class="ico">'+
+      '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
+      '</div><h3>Proveedor restringido</h3>'+
+      '<p>No es posible consultar contratos por este documento de proveedor.</p></div>';
+  }
+  function isBlocked(a){ return a.nitProv && BLOCKED_DOCS.indexOf(a.nitProv)>=0; }
+
+  $("form").addEventListener("submit", function(e){ e.preventDefault(); if(!F) return;
+    var a=readForm(); if(isBlocked(a)){ showBlocked(); return; } runQuery(a); });
   $("clear").addEventListener("click", function(){
     INPUT_IDS.forEach(function(id){ $(id).value=""; });
     if(F) runQuery(readForm());
