@@ -3,28 +3,28 @@
   /* ===== configuración ===== */
   /* API SODA de Socrata (datos.gov.co): soporta CORS desde el navegador.
      Dataset: SECOP II - Procesos de Contratación (p6dx-8zbt).
-     Para usar el otro dataset, cambia el id por: 77td-mmia */
+     (El dataset 77td-mmia está vacío, por eso no se usa.) */
   var API = "https://www.datos.gov.co/resource/p6dx-8zbt.json";
   var PAGE = 20;
 
   /* documentos de proveedor restringidos (igual que en Contratos) */
   var BLOCKED_DOCS = ["1128272022"];
 
-  /* candidatos por campo lógico (se resuelven contra una fila de muestra) */
+  /* nombres reales de campos del dataset p6dx-8zbt (con respaldos por si cambian) */
   var FIELD_CANDIDATES = {
-    nomEnt:      ["nombre_entidad","nombre_entidad_contratante","nombre_de_la_entidad"],
-    entidad:     ["entidad","nombre_de_la_entidad"],
-    desc:        ["descripci_n_del_procedimiento","descripcion_del_procedimiento","descripcion_del_proceso","descripci_n_del_proceso"],
-    referencia:  ["referencia_del_proceso","referencia_del_proces","referencia_del_contrato","referencia"],
-    nitProv:     ["nit_del_proveedor_adjudicado","nit_del_proveedor","documento_proveedor","nit_proveedor"],
-    nomProv:     ["nombre_del_proveedor","nombre_proveedor","proveedor_adjudicado","proveedor"],
-    valor:       ["valor_total_adjudicacion","valor_total_adjudicaci_n","valor_adjudicacion","precio_base","valor_del_contrato"],
-    modalidad:   ["modalidad_de_contratacion","modalidad_de_contrataci_n","modalidad"],
-    objeto:      ["objeto_del_contrato","objeto_a_contratar","nombre_del_procedimiento","objeto"],
-    fecha:       ["fecha_de_publicacion_del","fecha_de_publicacion_del_proceso","fecha_de_publicacion_fase_3","fecha_de_recepcion_de_ofertas","fecha_de_ultima_publicaci","fecha_de_publicacion"],
-    estado:      ["estado_del_procedimiento","fase","estado_de_apertura_del_proceso","estado"],
+    nomEnt:      ["entidad"],                                  /* nombre de la entidad (texto) */
+    nitEnt:      ["nit_entidad"],                              /* NIT entidad (texto) */
+    desc:        ["descripci_n_del_procedimiento","descripcion_del_procedimiento"],
+    referencia:  ["referencia_del_proceso","referencia"],
+    nitProv:     ["nit_del_proveedor_adjudicado","nit_del_proveedor"],   /* texto */
+    nomProv:     ["nombre_del_proveedor","nombre_del_adjudicador"],
+    valor:       ["valor_total_adjudicacion","precio_base"],   /* número */
+    modalidad:   ["modalidad_de_contratacion","modalidad"],
+    objeto:      ["nombre_del_procedimiento","objeto_del_contrato","objeto"],
+    fecha:       ["fecha_de_publicacion_del","fecha_de_publicacion_fase_3","fecha_de_ultima_publicaci","fecha_de_publicacion"],
+    estado:      ["estado_del_procedimiento","estado_resumen","fase","estado_de_apertura_del_proceso"],
     url:         ["urlproceso","url_del_proceso","url_proceso","url"],
-    departamento:["departamento_entidad","departamento","dpto"],
+    departamento:["departamento_entidad","departamento"],
     ciudad:      ["ciudad_entidad","ciudad","municipio"]
   };
 
@@ -66,43 +66,39 @@
   })();
 
   /* ===== consultas SODA (SoQL) ===== */
+  /* En este dataset: NIT entidad y NIT proveedor son TEXTO (coincidencia
+     exacta con comillas); valor_total_adjudicacion es NÚMERO (comparación
+     numérica). Los campos de texto libre usan lower()+like (contiene). */
   function buildWhere(a, opts){
     if(!F) return "";
     var p=[];
-    function txt(field, value){          /* campos de texto libre: contiene */
+    function txt(field, value){                 /* texto libre: contiene */
       if(!value || !field) return;
       var v=esc(opts.lower? value.toLowerCase() : value);
       p.push(opts.lower? "lower("+field+") like '%"+v+"%'" : field+" like '%"+v+"%'");
     }
-    function id(field, value){            /* identificadores: coincidencia exacta */
+    function idTxt(field, value){                /* identificador de texto: exacto */
+      if(!value || !field) return;
+      p.push(field+" = '"+esc(String(value).trim())+"'");
+    }
+    function gte(field, value){                  /* numérico: valor mínimo */
       if(!value || !field) return;
       var raw=String(value).trim();
-      if(opts.idNumeric && /^[0-9]+$/.test(raw)) p.push(field+" = "+raw);
-      else p.push(field+" = '"+esc(raw)+"'");
+      if(/^[0-9]+$/.test(raw)) p.push(field+" >= "+raw);
     }
-    function gte(field, value){           /* valor mínimo */
-      if(!value || !field) return;
-      var raw=String(value).trim();
-      if(!/^[0-9]+$/.test(raw)) return;
-      if(opts.idNumeric) p.push(field+" >= "+raw);
-      else p.push(field+" >= '"+raw+"'");
-    }
-    txt(F.nomEnt,     a.nomEnt);
-    txt(F.entidad,    a.entidad);
-    txt(F.desc,       a.desc);
-    txt(F.referencia, a.ref);
-    id(F.nitProv,     a.nitProv);
-    txt(F.nomProv,    a.nomProv);
-    gte(F.valor,      a.valorMin);
-    txt(F.modalidad,  a.mod);
-    txt(F.objeto,     a.objeto);
+    idTxt(F.nitEnt,    a.nitEnt);
+    txt(F.nomEnt,      a.nomEnt);
+    txt(F.desc,        a.desc);
+    txt(F.referencia,  a.ref);
+    idTxt(F.nitProv,   a.nitProv);
+    txt(F.nomProv,     a.nomProv);
+    gte(F.valor,       a.valorMin);
+    txt(F.modalidad,   a.mod);
+    txt(F.objeto,      a.objeto);
     if(a.anio && F.fecha){ var yy=parseInt(a.anio,10);
       p.push(F.fecha+" >= '"+yy+"-01-01T00:00:00' and "+F.fecha+" < '"+(yy+1)+"-01-01T00:00:00'"); }
-    if(F.nitProv){                       /* excluir proveedores restringidos */
-      BLOCKED_DOCS.forEach(function(doc){
-        if(opts.idNumeric && /^[0-9]+$/.test(doc)) p.push(F.nitProv+" != "+doc);
-        else p.push(F.nitProv+" != '"+esc(doc)+"'");
-      });
+    if(F.nitProv){                               /* excluir proveedores restringidos */
+      BLOCKED_DOCS.forEach(function(doc){ p.push(F.nitProv+" != '"+esc(doc)+"'"); });
     }
     return p.join(" and ");
   }
@@ -112,7 +108,8 @@
     var f=F.fecha;
     return ["coalesce("+f+",'1111-01-01T00:00:00') desc", f+" desc"];
   }
-  var WHERE_OPTS=[{lower:true,idNumeric:true},{lower:true,idNumeric:false},{lower:false,idNumeric:false}];
+  /* respaldo: alterna lower()/sin lower y orden con/sin coalesce ante un 400 */
+  var WHERE_OPTS=[{lower:true},{lower:false}];
   function buildStrategies(){
     var s=[]; orderCandidates().forEach(function(ord){
       WHERE_OPTS.forEach(function(opts){ s.push({ord:ord, opts:opts}); });
@@ -146,11 +143,11 @@
   /* ===== descarga a Excel ===== */
   var XLS_CAP=5000, XLS_BATCH=1000;
   var XLS_COLS=[
-    ["nomEnt","Nombre entidad"], ["entidad","Entidad"],
+    ["nomEnt","Entidad"], ["nitEnt","NIT entidad"],
     ["objeto","Objeto"], ["desc","Descripción del procedimiento"],
     ["referencia","Referencia del proceso"], ["modalidad","Modalidad"],
     ["nomProv","Proveedor adjudicado"], ["nitProv","NIT proveedor"],
-    ["valor","Valor total adjudicado"], ["fecha","Fecha"],
+    ["valor","Valor total adjudicado"], ["fecha","Fecha de publicación"],
     ["estado","Estado"], ["departamento","Departamento"],
     ["ciudad","Ciudad"], ["url","URL del proceso"]
   ];
@@ -231,7 +228,7 @@
   }
 
   function cardHtml(row){
-    var ent=val(row,F.nomEnt)||val(row,F.entidad), prov=val(row,F.nomProv),
+    var ent=val(row,F.nomEnt), nitE=val(row,F.nitEnt), prov=val(row,F.nomProv),
         docP=val(row,F.nitProv), obj=val(row,F.objeto)||val(row,F.desc),
         ref=val(row,F.referencia), mod=val(row,F.modalidad), valor=val(row,F.valor),
         fecha=val(row,F.fecha), url=val(row,F.url), depto=val(row,F.departamento),
@@ -241,8 +238,10 @@
     var year=getYear(fecha);
     var valNum=(valor!=null && valor!=="")? Number(valor):null;
     var loc=[ciudad,depto].filter(Boolean).join(", ");
+    var provDef=(prov && prov!=="No Definido"), docDef=(docP && docP!=="No Definido");
 
     var meta="";
+    if(nitE) meta+='<span><span class="k">NIT</span> '+escHtml(nitE)+'</span>';
     if(loc)  meta+='<span>'+escHtml(loc)+'</span>';
     if(ref)  meta+='<span><span class="k">Ref.</span> '+escHtml(ref)+'</span>';
 
@@ -252,8 +251,8 @@
     if(fecha)  chips+='<span class="chip">'+escHtml(fmtFecha(fecha))+'</span>';
 
     var provHtml="";
-    if(prov){ provHtml='<div class="prov"><span class="plabel">Proveedor adjudicado</span>'+
-      '<span class="who">'+escHtml(prov)+'</span>'+(docP? '<span class="nit">· '+escHtml(docP)+'</span>':'')+'</div>'; }
+    if(provDef){ provHtml='<div class="prov"><span class="plabel">Proveedor adjudicado</span>'+
+      '<span class="who">'+escHtml(prov)+'</span>'+(docDef? '<span class="nit">· '+escHtml(docP)+'</span>':'')+'</div>'; }
 
     var safeUrl=(url && /^https?:\/\//i.test(url))? url : null;
     var verproc = safeUrl
@@ -286,7 +285,7 @@
     if(loading){ rcount.innerHTML="Buscando…"; }
     else if(count!=null){ rcount.innerHTML='<span>'+NUM.format(count)+'</span> proceso'+(count===1?'':'s')+' encontrado'+(count===1?'':'s'); }
     else { rcount.textContent=rows.length+" resultado"+(rows.length===1?'':'s'); }
-    var hasF = active && (active.nomEnt||active.entidad||active.desc||active.ref||active.nitProv||active.nomProv||active.valorMin||active.mod||active.objeto||active.anio);
+    var hasF = active && (active.nitEnt||active.nomEnt||active.desc||active.ref||active.nitProv||active.nomProv||active.valorMin||active.mod||active.objeto||active.anio);
     rsub.textContent = hasF? "Según los filtros aplicados" : "Mostrando una muestra del registro nacional";
 
     var html="";
@@ -336,13 +335,13 @@
   }
   function readForm(){
     return {
-      nomEnt:$("f_nomEnt").value.trim(), entidad:$("f_entidad").value.trim(),
+      nitEnt:$("f_nitEnt").value.trim(), nomEnt:$("f_nomEnt").value.trim(),
       desc:$("f_desc").value.trim(), ref:$("f_ref").value.trim(), anio:$("f_anio").value,
       nitProv:$("f_nitProv").value.trim(), nomProv:$("f_nomProv").value.trim(),
       valorMin:$("f_valor").value.trim(), mod:$("f_mod").value.trim(), objeto:$("f_objeto").value.trim()
     };
   }
-  var INPUT_IDS=["f_nomEnt","f_entidad","f_desc","f_ref","f_anio","f_nitProv","f_nomProv","f_valor","f_mod","f_objeto"];
+  var INPUT_IDS=["f_nomEnt","f_nitEnt","f_desc","f_ref","f_anio","f_nitProv","f_nomProv","f_valor","f_mod","f_objeto"];
 
   function showIdle(){
     active=null; rows=[]; count=null; error=null; loading=false; done=false;
@@ -374,7 +373,7 @@
   $("btnXlsx").addEventListener("click", downloadExcel);
 
   /* campos numéricos: solo dígitos (escritura y pegado) */
-  ["f_nitProv","f_valor"].forEach(function(id){
+  ["f_nitEnt","f_nitProv","f_valor"].forEach(function(id){
     $(id).addEventListener("input", function(){
       var clean=this.value.replace(/\D+/g,"");
       if(this.value!==clean) this.value=clean;
