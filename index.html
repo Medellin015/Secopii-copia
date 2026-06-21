@@ -262,13 +262,7 @@
     <div class="rsub" id="rsub">Mostrando una muestra del registro nacional</div>
   </div>
   <div class="sortwrap">
-    <label for="sort">Ordenar:</label>
-    <select id="sort">
-      <option value="">Relevancia</option>
-      <option value="fecha_desc">Fecha de firma · reciente</option>
-      <option value="valor_desc">Valor · mayor a menor</option>
-      <option value="valor_asc">Valor · menor a mayor</option>
-    </select>
+    <span>Ordenado por: <b>Fecha de firma · reciente</b></span>
   </div>
 </div>
 
@@ -355,39 +349,47 @@
     for(var yr=now; yr>=2015; yr--){ var o=document.createElement("option"); o.value=yr;o.textContent=yr;y.appendChild(o); }
   })();
 
-  /* ===== consultas OData ===== */
-  function buildWhere(a, lower){
+  /* ===== consultas SODA (SoQL) ===== */
+  /* opts.lower    -> usa lower()+like en campos de texto (case-insensitive)
+     opts.idNumeric-> trata los identificadores (NIT/documento) como número.
+     Los campos NIT/documento suelen ser columnas numéricas: aplicarles
+     lower()/like provoca HTTP 400, por eso usan coincidencia exacta. */
+  function buildWhere(a, opts){
     if(!F) return "";
     var p=[];
-    function txt(field, value){
+    function txt(field, value){          /* campos de texto libre: contiene */
       if(!value || !field) return;
-      var v=esc(lower? value.toLowerCase() : value);
-      p.push(lower? "lower("+field+") like '%"+v+"%'" : field+" like '%"+v+"%'");
+      var v=esc(opts.lower? value.toLowerCase() : value);
+      p.push(opts.lower? "lower("+field+") like '%"+v+"%'" : field+" like '%"+v+"%'");
     }
-    txt(F.nitEntidad,   a.nitEnt);
+    function id(field, value){            /* identificadores: coincidencia exacta */
+      if(!value || !field) return;
+      var raw=String(value).trim();
+      if(opts.idNumeric && /^[0-9]+$/.test(raw)) p.push(field+" = "+raw);   /* columna numérica */
+      else p.push(field+" = '"+esc(raw)+"'");                               /* columna de texto */
+    }
+    id(F.nitEntidad,    a.nitEnt);
     txt(F.entidad,      a.nomEnt);
     txt(F.objeto,       a.objeto);
     txt(F.referencia,   a.ref);
     txt(F.descripcion,  a.desc);
-    txt(F.docProveedor, a.nitProv);
+    id(F.docProveedor,  a.nitProv);
     txt(F.proveedor,    a.nomProv);
-    txt(F.repLegalId,   a.nitRep);
+    id(F.repLegalId,    a.nitRep);
     if(a.mod && F.modalidad) p.push(F.modalidad+" = '"+esc(a.mod)+"'");
     if(a.anio && F.fechaFirma){ var yy=parseInt(a.anio,10);
       p.push(F.fechaFirma+" >= '"+yy+"-01-01T00:00:00' and "+F.fechaFirma+" < '"+(yy+1)+"-01-01T00:00:00'"); }
     return p.join(" and ");
   }
-  function orderBy(s){
-    if(!F) return "";
-    if(s==="fecha_desc" && F.fechaFirma) return F.fechaFirma+" desc";
-    if(s==="valor_desc" && F.valor) return F.valor+" desc";
-    if(s==="valor_asc"  && F.valor) return F.valor+" asc";
-    return "";
+  function orderBy(){                     /* siempre por fecha de firma, más reciente primero */
+    return (F && F.fechaFirma)? F.fechaFirma+" desc" : "";
   }
+  /* estrategias que se prueban en orden si el servidor responde 400 */
+  var WHERE_OPTS=[{lower:true,idNumeric:true},{lower:true,idNumeric:false},{lower:false,idNumeric:false}];
   function fetchPage(a, idx, withCount){
-    var off=idx*PAGE, ord=orderBy(a.sort);
-    function attempt(lower){
-      var w=buildWhere(a,lower);
+    var off=idx*PAGE, ord=orderBy();
+    function attempt(opts){
+      var w=buildWhere(a,opts);
       var dataUrl=API+"?$limit="+PAGE+"&$offset="+off;
       if(w) dataUrl+="&$where="+encodeURIComponent(w);
       if(ord) dataUrl+="&$order="+encodeURIComponent(ord);
@@ -401,7 +403,9 @@
         return out;
       });
     }
-    return attempt(true).catch(function(){ return attempt(false); });
+    return WHERE_OPTS.reduce(function(promise, opts, i){
+      return i===0 ? attempt(opts) : promise.catch(function(){ return attempt(opts); });
+    }, null);
   }
 
   /* ===== render ===== */
@@ -527,7 +531,7 @@
       nitEnt:$("f_nitEnt").value.trim(), nomEnt:$("f_nomEnt").value.trim(),
       objeto:$("f_objeto").value.trim(), ref:$("f_ref").value.trim(), desc:$("f_desc").value.trim(),
       nitProv:$("f_nitProv").value.trim(), nomProv:$("f_nomProv").value.trim(),
-      nitRep:$("f_nitRep").value.trim(), mod:$("f_mod").value, anio:$("f_anio").value, sort:$("sort").value
+      nitRep:$("f_nitRep").value.trim(), mod:$("f_mod").value, anio:$("f_anio").value
     };
   }
   var INPUT_IDS=["f_nitEnt","f_nomEnt","f_objeto","f_ref","f_desc","f_nitProv","f_nomProv","f_nitRep","f_mod","f_anio"];
@@ -537,7 +541,6 @@
     INPUT_IDS.forEach(function(id){ $(id).value=""; });
     if(F) runQuery(readForm());
   });
-  $("sort").addEventListener("change", function(){ if(F&&active) runQuery(readForm()); });
 
   /* ===== arranque ===== */
   (function boot(){
