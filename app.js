@@ -76,10 +76,10 @@
   })();
 
   /* ===== consultas SODA (SoQL) ===== */
-  /* opts.lower    -> usa lower()+like en campos de texto (case-insensitive)
-     opts.idNumeric-> trata los identificadores (NIT/documento) como número.
-     Los campos NIT/documento suelen ser columnas numéricas: aplicarles
-     lower()/like provoca HTTP 400, por eso usan coincidencia exacta. */
+  /* opts.lower -> usa lower()+like en campos de texto (case-insensitive). */
+  /* Tipos confirmados en jbjy-vk9h: nit_entidad es NÚMERO; documento_proveedor
+     e identificaci_n_representante_legal son TEXTO; valor_del_contrato es número
+     y fecha_de_firma es fecha. Por eso los identificadores usan literal correcto. */
   function buildWhere(a, opts){
     if(!F) return "";
     var p=[];
@@ -88,28 +88,29 @@
       var v=esc(opts.lower? value.toLowerCase() : value);
       p.push(opts.lower? "lower("+field+") like '%"+v+"%'" : field+" like '%"+v+"%'");
     }
-    function id(field, value){            /* identificadores: coincidencia exacta */
+    function idNum(field, value){         /* identificador numérico: exacto sin comillas */
       if(!value || !field) return;
       var raw=String(value).trim();
-      if(opts.idNumeric && /^[0-9]+$/.test(raw)) p.push(field+" = "+raw);   /* columna numérica */
-      else p.push(field+" = '"+esc(raw)+"'");                               /* columna de texto */
+      if(/^[0-9]+$/.test(raw)) p.push(field+" = "+raw);
+      else p.push(field+" = '"+esc(raw)+"'");
     }
-    id(F.nitEntidad,    a.nitEnt);
-    txt(F.entidad,      a.nomEnt);
-    txt(F.objeto,       a.objeto);
-    txt(F.referencia,   a.ref);
-    txt(F.descripcion,  a.desc);
-    id(F.docProveedor,  a.nitProv);
-    txt(F.proveedor,    a.nomProv);
-    id(F.repLegalId,    a.nitRep);
+    function idTxt(field, value){         /* identificador de texto: exacto con comillas */
+      if(!value || !field) return;
+      p.push(field+" = '"+esc(String(value).trim())+"'");
+    }
+    idNum(F.nitEntidad,   a.nitEnt);      /* nit_entidad es numérico */
+    txt(F.entidad,        a.nomEnt);
+    txt(F.objeto,         a.objeto);
+    txt(F.referencia,     a.ref);
+    txt(F.descripcion,    a.desc);
+    idTxt(F.docProveedor, a.nitProv);     /* documento_proveedor es texto */
+    txt(F.proveedor,      a.nomProv);
+    idTxt(F.repLegalId,   a.nitRep);      /* identificaci_n_representante_legal es texto */
     if(a.mod && F.modalidad) p.push(F.modalidad+" = '"+esc(a.mod)+"'");
     if(a.anio && F.fechaFirma){ var yy=parseInt(a.anio,10);
       p.push(F.fechaFirma+" >= '"+yy+"-01-01T00:00:00' and "+F.fechaFirma+" < '"+(yy+1)+"-01-01T00:00:00'"); }
-    if(F.docProveedor){                  /* excluir proveedores restringidos */
-      BLOCKED_DOCS.forEach(function(doc){
-        if(opts.idNumeric && /^[0-9]+$/.test(doc)) p.push(F.docProveedor+" != "+doc);
-        else p.push(F.docProveedor+" != '"+esc(doc)+"'");
-      });
+    if(F.docProveedor){                  /* excluir proveedores restringidos (texto) */
+      BLOCKED_DOCS.forEach(function(doc){ p.push(F.docProveedor+" != '"+esc(doc)+"'"); });
     }
     return p.join(" and ");
   }
@@ -121,8 +122,8 @@
     var f=F.fechaFirma;
     return ["coalesce("+f+",'1111-01-01T00:00:00') desc", f+" desc"];
   }
-  /* estrategias de respaldo (orden × tipo de filtro) que se prueban ante 400 */
-  var WHERE_OPTS=[{lower:true,idNumeric:true},{lower:true,idNumeric:false},{lower:false,idNumeric:false}];
+  /* respaldo: alterna lower()/sin lower y orden con/sin coalesce ante un 400 */
+  var WHERE_OPTS=[{lower:true},{lower:false}];
   function buildStrategies(){
     var s=[]; orderCandidates().forEach(function(ord){
       WHERE_OPTS.forEach(function(opts){ s.push({ord:ord, opts:opts}); });
