@@ -362,6 +362,15 @@
   }
   var INPUT_IDS=["f_nitEnt","f_nomEnt","f_objeto","f_ref","f_desc","f_nitProv","f_nomProv","f_nitRep","f_mod","f_anio"];
 
+  function showIdle(){
+    active=null; rows=[]; count=null; error=null; loading=false; done=false;
+    rcount.textContent="Realiza una búsqueda";
+    rsub.textContent="Usa los filtros y pulsa Buscar para consultar contratos";
+    list.innerHTML='<div class="state"><div class="ico">'+
+      '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'+
+      '</div><h3>Comienza tu búsqueda</h3>'+
+      '<p>Ingresa uno o más filtros y pulsa <b>Buscar</b> para consultar los contratos del SECOP&nbsp;II.</p></div>';
+  }
   function showBlocked(){
     active=null; rows=[]; count=null; error=null; loading=false; done=true;
     setBtnLoading(false);
@@ -378,7 +387,7 @@
     var a=readForm(); if(isBlocked(a)){ showBlocked(); return; } runQuery(a); });
   $("clear").addEventListener("click", function(){
     INPUT_IDS.forEach(function(id){ $(id).value=""; });
-    if(F) runQuery(readForm());
+    if(F) showIdle();
   });
   $("btnXlsx").addEventListener("click", downloadExcel);
 
@@ -400,7 +409,7 @@
       fetch(API+"?$select="+encodeURIComponent("count(1) as cnt")).then(function(x){ return x.ok?x.json():null; })
         .then(function(d){ if(d && d[0] && d[0].cnt!=null) $("total").textContent=NUM.format(Number(d[0].cnt)); })
         .catch(function(){});
-      runQuery(readForm());
+      showIdle();
     })
     .catch(function(e){
       list.innerHTML='<div class="state error"><div class="ico">'+
