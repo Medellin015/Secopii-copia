@@ -52,6 +52,17 @@
   function fmtFecha(v){ if(!v) return null; var d=new Date(v); if(isNaN(d)) return String(v).slice(0,10);
     return d.toLocaleDateString("es-CO",{year:"numeric",month:"short",day:"2-digit"}); }
   function getYear(v){ if(!v) return null; var d=new Date(v); return isNaN(d)?null:d.getFullYear(); }
+  /* publicado hace 7 días o menos => insignia "Nuevo" en la tarjeta */
+  var NEW_MS=7*864e5;
+  function isNuevo(v){ if(!v) return false; var d=new Date(v); if(isNaN(d)) return false;
+    var dif=Date.now()-d.getTime(); return dif<=NEW_MS && dif>=-864e5; }
+  /* consulta por defecto: licitaciones publicadas en el último mes.
+     La marca de tiempo se fija UNA vez por consulta (recentSince) para que la
+     paginación, el conteo y la descarga a Excel usen exactamente el mismo corte. */
+  function recentQuery(){
+    var d=new Date(); d.setMonth(d.getMonth()-1);
+    return { recent:true, recentSince:d.toISOString().slice(0,19) };
+  }
 
   /* fetch con timeout: evita que una conexión colgada deje la UI en "Buscando…"
      para siempre. Sin coste de rendimiento; solo aborta peticiones sin respuesta. */
@@ -113,6 +124,8 @@
     txt(F.objeto,      a.objeto);
     if(a.anio && F.fecha){ var yy=parseInt(a.anio,10);
       p.push(F.fecha+" >= '"+yy+"-01-01T00:00:00' and "+F.fecha+" < '"+(yy+1)+"-01-01T00:00:00'"); }
+    if(a.recent && a.recentSince && F.fecha){   /* vista por defecto: último mes */
+      p.push(F.fecha+" >= '"+esc(a.recentSince)+"'"); }
     if(F.nitProv){                               /* excluir proveedores restringidos */
       BLOCKED_DOCS.forEach(function(doc){ p.push(F.nitProv+" != '"+esc(doc)+"'"); });
     }
@@ -269,7 +282,8 @@
     }
     loop(0).then(function(){
       if(!all.length){ alert("No hay procesos para descargar con los filtros actuales."); return; }
-      exportRecords(buildRecords(all), "procesos-secop-ii-"+new Date().toISOString().slice(0,10));
+      var base=(a&&a.recent)? "licitaciones-ultimo-mes-" : "procesos-secop-ii-";
+      exportRecords(buildRecords(all), base+new Date().toISOString().slice(0,10));
     }).catch(function(e){
       alert("No se pudo generar el archivo: "+((e&&e.message)||"error de red"));
     }).then(function(){ xlsBusy=false; setXlsBusy(false); });
@@ -302,9 +316,10 @@
     if(ref)  meta+='<span><span class="k">Ref.</span> '+escHtml(ref)+'</span>';
 
     var chips="";
+    if(isNuevo(fecha)) chips+='<span class="chip new">Nuevo</span>';
     if(mod)    chips+='<span class="chip mod">'+escHtml(mod)+'</span>';
     if(estado) chips+='<span class="chip">'+escHtml(estado)+'</span>';
-    if(fecha)  chips+='<span class="chip">'+escHtml(fmtFecha(fecha))+'</span>';
+    if(fecha)  chips+='<span class="chip date">Publicado · '+escHtml(fmtFecha(fecha))+'</span>';
 
     var provHtml="";
     if(provDef){ provHtml='<div class="prov"><span class="plabel">Proveedor adjudicado</span>'+
@@ -338,11 +353,18 @@
   }
 
   function render(){
+    var isRecent = !!(active && active.recent);
+    var badge=$("viewbadge"); if(badge) badge.hidden=!isRecent;
     if(loading){ rcount.innerHTML="Buscando…"; }
-    else if(count!=null){ rcount.innerHTML='<span>'+NUM.format(count)+'</span> proceso'+(count===1?'':'s')+' encontrado'+(count===1?'':'s'); }
+    else if(count!=null){
+      rcount.innerHTML = isRecent
+        ? '<span>'+NUM.format(count)+'</span> '+(count===1?'licitación publicada':'licitaciones publicadas')+' en el último mes'
+        : '<span>'+NUM.format(count)+'</span> proceso'+(count===1?'':'s')+' encontrado'+(count===1?'':'s');
+    }
     else { rcount.textContent=rows.length+" resultado"+(rows.length===1?'':'s'); }
     var hasF = active && (active.nitEnt||active.nomEnt||active.desc||active.ref||active.nitProv||active.nomProv||active.valorMin||active.mod||active.objeto||active.anio);
-    rsub.textContent = hasF? "Según los filtros aplicados" : "Mostrando una muestra del registro nacional";
+    rsub.textContent = isRecent? "Las más recientes primero · desde "+(fmtFecha(active.recentSince)||"hace un mes")
+      : (hasF? "Según los filtros aplicados" : "Mostrando una muestra del registro nacional");
 
     var html="";
     if(loading && rows.length===0){ for(var i=0;i<6;i++) html+='<div class="skel"></div>'; list.innerHTML=html; return; }
@@ -356,8 +378,11 @@
     if(rows.length===0){
       list.innerHTML='<div class="state"><div class="ico">'+
         '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h10M4 17h7"/></svg>'+
-        '</div><h3>Sin coincidencias</h3>'+
-        '<p>Ningún proceso coincide con esos filtros. Prueba términos más generales o limpia alguno.</p></div>';
+        (isRecent
+          ? '</div><h3>Sin licitaciones recientes</h3>'+
+            '<p>El conjunto de datos aún no registra procesos publicados en el último mes. Usa los filtros para consultar el histórico.</p></div>'
+          : '</div><h3>Sin coincidencias</h3>'+
+            '<p>Ningún proceso coincide con esos filtros. Prueba términos más generales o limpia alguno.</p></div>');
       return;
     }
     for(var j=0;j<rows.length;j++) html+=cardHtml(rows[j]);
@@ -417,18 +442,12 @@
   }
   var INPUT_IDS=["f_nomEnt","f_nitEnt","f_desc","f_ref","f_anio","f_nitProv","f_nomProv","f_valor","f_mod","f_objeto"];
 
-  function showIdle(){
-    active=null; rows=[]; count=null; error=null; loading=false; done=false;
-    rcount.textContent="Realiza una búsqueda";
-    rsub.textContent="Usa los filtros y pulsa Buscar para consultar procesos";
-    list.innerHTML='<div class="state"><div class="ico">'+
-      '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'+
-      '</div><h3>Comienza tu búsqueda</h3>'+
-      '<p>Ingresa uno o más filtros y pulsa <b>Buscar</b> para consultar los procesos del SECOP&nbsp;II.</p></div>';
-  }
+  /* vista por defecto: últimas licitaciones publicadas (último mes) */
+  function showRecent(){ runQuery(recentQuery()); }
   function showBlocked(){
     active=null; rows=[]; count=null; error=null; loading=false; done=true;
     setBtnLoading(false);
+    var badge=$("viewbadge"); if(badge) badge.hidden=true;
     rcount.textContent="Búsqueda no permitida";
     rsub.textContent="Este proveedor está restringido";
     list.innerHTML='<div class="state"><div class="ico">'+
@@ -438,11 +457,16 @@
   }
   function isBlocked(a){ return a.nitProv && BLOCKED_DOCS.indexOf(a.nitProv)>=0; }
 
+  function hasFilters(a){
+    return !!(a.nitEnt||a.nomEnt||a.desc||a.ref||a.nitProv||a.nomProv||a.valorMin||a.mod||a.objeto||a.anio);
+  }
   $("form").addEventListener("submit", function(e){ e.preventDefault(); if(!F) return;
-    var a=readForm(); if(isBlocked(a)){ showBlocked(); return; } runQuery(a); });
+    var a=readForm(); if(isBlocked(a)){ showBlocked(); return; }
+    if(!hasFilters(a)){ showRecent(); return; }   /* sin filtros => últimas licitaciones */
+    runQuery(a); });
   $("clear").addEventListener("click", function(){
     INPUT_IDS.forEach(function(id){ $(id).value=""; });
-    if(F) showIdle();
+    if(F) showRecent();
   });
   $("btnXlsx").addEventListener("click", downloadExcel);
 
@@ -478,7 +502,7 @@
       fetchT(API+"?$select="+encodeURIComponent("count(1) as cnt")).then(function(x){ return x.ok?x.json():null; })
         .then(function(d){ if(d && d[0] && d[0].cnt!=null) $("total").textContent=NUM.format(Number(d[0].cnt)); })
         .catch(function(){});
-      showIdle();
+      showRecent();
     })
     .catch(function(e){
       list.innerHTML='<div class="state error"><div class="ico">'+

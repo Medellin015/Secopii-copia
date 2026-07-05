@@ -29,7 +29,7 @@
         <h1 class="title">Procesos de Contratación <span class="em">SECOP&nbsp;II</span></h1>
       </div>
     </div>
-    <p class="hero-sub">Consulta los procesos de contratación electrónicos en Colombia.</p>
+    <p class="hero-sub">Consulta los procesos de contratación electrónicos en Colombia. Al abrir la página verás las licitaciones publicadas en el último mes, de la más reciente a la más antigua.</p>
     <nav class="pagenav">
       <a href="index.html">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
@@ -51,7 +51,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
         Filtros del proceso
       </h2>
-      <span class="hint">Escribe en los campos de texto o elige en los desplegables, luego pulsa Buscar.</span>
+      <span class="hint">Al abrir se muestran las licitaciones del último mes. Escribe o elige filtros y pulsa Buscar para afinar la consulta.</span>
     </div>
 
     <div class="grid">
@@ -111,8 +111,14 @@
 
 <div class="resultsbar">
   <div>
-    <div class="rcount" id="rcount">Conectando con datos abiertos…</div>
-    <div class="rsub" id="rsub">Mostrando una muestra del registro nacional</div>
+    <div class="rcount-row">
+      <div class="rcount" id="rcount">Conectando con datos abiertos…</div>
+      <span class="viewbadge" id="viewbadge" hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        Último mes
+      </span>
+    </div>
+    <div class="rsub" id="rsub">Cargando las últimas licitaciones publicadas…</div>
   </div>
   <div class="sortwrap">
     <span>Ordenado por: <b>Fecha · reciente</b></span>
