@@ -4,104 +4,113 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://www.datos.gov.co; img-src 'self' data:; object-src 'none'; base-uri 'self'" />
-<title>Contratos Celebrados · SECOP II</title>
-<meta name="description" content="Buscador de contratos electrónicos del SECOP II sobre datos abiertos de Colombia." />
+<title>Licitaciones y Procesos de Contratación · SECOP II</title>
+<meta name="description" content="Buscador de licitaciones y procesos de contratación del SECOP II sobre datos abiertos de Colombia. Sin contratación directa." />
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="styles.css">
 
 <!-- xlsx-js-style: genera .xlsx con estilos en el navegador (reemplazo directo de SheetJS; si no carga, se usa CSV) -->
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" integrity="sha384-OUW9euuUyxyHcAhTqbhI+Iyb8LMssXt/cpz0yXhs9UWG2/R/uaWdakx/4cfww7Vb" crossorigin="anonymous"></script>
 <!-- Lógica de la aplicación -->
-<script defer src="app.js"></script>
+<script defer src="procesos.js"></script>
 </head>
 <body>
 
 <header class="hero">
-  <div class="hero-inner">
-    <div class="brandrow">
-      <div class="seal">C</div>
-      <div>
-        <p class="eyebrow">Colombia Compra Eficiente</p>
-        <h1 class="title">Contratos Celebrados <span class="em">SECOP&nbsp;II</span></h1>
-      </div>
+  <div class="topbar">
+    <div class="brand">
+      <span class="seal">S</span>
+      <span class="brand-t">SECOP&nbsp;II <em>· Procesos</em></span>
     </div>
-    <p class="hero-sub">Consulta los contratos electrónicos celebrados en Colombia.</p>
-    <nav class="pagenav">
-      <a href="procesos.html">
-        Ir a Procesos de contratación
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      </a>
-    </nav>
-    <div class="counter">
-      <span class="dot"></span>
-      <span class="big" id="total">—</span>
-      <span class="lbl">contratos disponibles en el conjunto de datos en vivo</span>
+    <a class="top-link" href="instructivo.pdf" target="_blank" rel="noopener noreferrer">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>
+      Instructivo (PDF)
+    </a>
+  </div>
+  <div class="hero-inner">
+    <p class="eyebrow">Colombia Compra Eficiente · Datos abiertos</p>
+    <h1 class="title">Licitaciones y procesos de contratación <span class="em">en&nbsp;vivo</span></h1>
+    <p class="hero-sub">Al abrir la página verás las licitaciones publicadas en el último mes, de la más reciente a la más antigua. La <b>contratación directa está excluida</b> de todo el aplicativo: de la vista inicial, de las búsquedas con filtros y de las descargas.</p>
+    <div class="stats">
+      <div class="stat">
+        <span class="dot"></span>
+        <span class="big" id="total">—</span>
+        <span class="lbl">procesos consultables<br>sin contratación directa</span>
+      </div>
+      <div class="stat-note">Fuente en vivo · datos.gov.co · SECOP&nbsp;II</div>
     </div>
   </div>
 </header>
 
 <div class="wrap">
-  <form class="panel" id="form">
-    <div class="panel-head">
+  <form class="filters" id="form">
+    <div class="filters-head">
       <h2>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
-        Filtros del contrato
+        Filtros del proceso
       </h2>
-      <span class="hint">Escribe en los campos de texto o elige en los desplegables, luego pulsa Buscar.</span>
+      <span class="hint">Al abrir se muestran las licitaciones del último mes. Escribe o elige filtros y pulsa Buscar para afinar.</span>
     </div>
 
     <div class="grid">
       <div class="fld">
-        <label for="f_nitEnt">Nit Entidad Contratante</label>
-        <div class="ctrl"><input id="f_nitEnt" type="text" inputmode="numeric" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
+        <label for="f_nitEnt">NIT Entidad Contratante</label>
+        <div class="ctrl"><input id="f_nitEnt" type="text" inputmode="numeric" placeholder="Todas" autocomplete="off"/></div>
         <small class="dv-note">(sin dígito de verificación)</small>
       </div>
       <div class="fld">
         <label for="f_nomEnt">Nombre Entidad Contratante</label>
-        <div class="ctrl"><input id="f_nomEnt" type="text" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
+        <div class="ctrl"><input id="f_nomEnt" type="text" placeholder="Todas" autocomplete="off"/></div>
       </div>
       <div class="fld">
-        <label for="f_objeto">Objeto del Contrato</label>
-        <div class="ctrl"><input id="f_objeto" type="text" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
+        <label for="f_desc">Descripción del procedimiento</label>
+        <div class="ctrl"><input id="f_desc" type="text" placeholder="Todas" autocomplete="off"/></div>
       </div>
       <div class="fld">
-        <label for="f_ref">Referencia (Núm de contrato)</label>
-        <div class="ctrl"><input id="f_ref" type="text" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
+        <label for="f_ref">Referencia del proceso</label>
+        <div class="ctrl"><input id="f_ref" type="text" placeholder="Todas" autocomplete="off"/></div>
       </div>
       <div class="fld">
-        <label for="f_desc">Descripción del Proceso</label>
-        <div class="ctrl"><input id="f_desc" type="text" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
+        <label for="f_anio">Año</label>
+        <div class="ctrl"><select id="f_anio"><option value="">Todas</option></select></div>
       </div>
 
       <div class="fld">
-        <label for="f_nitProv">Nit Proveedor</label>
-        <div class="ctrl"><input id="f_nitProv" type="text" inputmode="numeric" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
+        <label for="f_nitProv">Nit del Proveedor Adjudicado</label>
+        <div class="ctrl"><input id="f_nitProv" type="text" inputmode="numeric" placeholder="Todas" autocomplete="off"/></div>
         <small class="dv-note">(sin dígito de verificación)</small>
       </div>
       <div class="fld">
         <label for="f_nomProv">Nombre del Proveedor</label>
-        <div class="ctrl"><input id="f_nomProv" type="text" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
+        <div class="ctrl"><input id="f_nomProv" type="text" placeholder="Todas" autocomplete="off"/></div>
       </div>
       <div class="fld">
-        <label for="f_nitRep">Nit Rep Legal</label>
-        <div class="ctrl"><input id="f_nitRep" type="text" inputmode="numeric" placeholder="Todas" autocomplete="off"/><span class="typed"></span></div>
-        <small class="dv-note">(sin dígito de verificación)</small>
+        <label for="f_valor">Valor Total Adjudicado (mínimo)</label>
+        <div class="ctrl"><input id="f_valor" type="text" inputmode="numeric" placeholder="Todas" autocomplete="off"/></div>
       </div>
       <div class="fld">
         <label for="f_mod">Modalidad de Contratación</label>
-        <div class="ctrl"><select id="f_mod"><option value="">Todas</option></select></div>
+        <div class="ctrl"><select id="f_mod">
+          <option value="">Todas (sin contratación directa)</option>
+          <option value="licitación">Licitación pública</option>
+          <option value="selección abreviada">Selección abreviada</option>
+          <option value="concurso de méritos">Concurso de méritos</option>
+          <option value="mínima cuantía">Mínima cuantía</option>
+          <option value="subasta">Subasta</option>
+          <option value="régimen especial">Régimen especial</option>
+        </select></div>
       </div>
       <div class="fld">
-        <label for="f_anio">Año firma del contrato</label>
-        <div class="ctrl"><select id="f_anio"><option value="">Todas</option></select></div>
+        <label for="f_objeto">Objeto</label>
+        <div class="ctrl"><input id="f_objeto" type="text" placeholder="Todas" autocomplete="off"/></div>
       </div>
     </div>
 
-    <div class="panel-actions">
+    <div class="filters-actions">
       <button type="button" class="btn btn-ghost" id="clear">Limpiar filtros</button>
       <button class="btn btn-primary" type="submit" id="btnSearch" disabled>
         <span id="btnIcon"><span class="spin"></span></span> Buscar
@@ -112,11 +121,17 @@
 
 <div class="resultsbar">
   <div>
-    <div class="rcount" id="rcount">Conectando con datos abiertos…</div>
-    <div class="rsub" id="rsub">Mostrando una muestra del registro nacional</div>
+    <div class="rcount-row">
+      <div class="rcount" id="rcount">Conectando con datos abiertos…</div>
+      <span class="viewbadge" id="viewbadge" hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        Último mes
+      </span>
+    </div>
+    <div class="rsub" id="rsub">Cargando las últimas licitaciones publicadas…</div>
   </div>
   <div class="sortwrap">
-    <span>Ordenado por: <b>Fecha de firma · reciente</b></span>
+    <span>Ordenado por: <b>Fecha · reciente</b></span>
     <button type="button" class="btn-xlsx" id="btnXlsx" disabled>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
       <span id="xlsLabel"> Descargar Excel</span>
@@ -129,8 +144,8 @@
 
 <footer>
   <div class="foot">
-    <span>Fuente: <a href="https://www.datos.gov.co/Gastos-Gubernamentales/SECOP-II-Contratos-Electr-nicos/jbjy-vk9h" target="_blank" rel="noopener noreferrer">SECOP&nbsp;II — Contratos Electrónicos</a> · API SODA de datos.gov.co</span>
-    <span>Los enlaces «Ver proceso» abren la ficha pública en community.secop.gov.co</span>
+    <span>Fuente: <a href="https://www.datos.gov.co/resource/p6dx-8zbt" target="_blank" rel="noopener noreferrer">SECOP&nbsp;II — Procesos de Contratación</a> · API SODA de datos.gov.co</span>
+    <span>La contratación directa está excluida de todas las consultas · «Ver proceso» abre la ficha pública en community.secop.gov.co</span>
     <span><a class="guide-link" href="instructivo.pdf" target="_blank" rel="noopener noreferrer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg> Instructivo de uso (PDF)</a></span>
   </div>
 </footer>

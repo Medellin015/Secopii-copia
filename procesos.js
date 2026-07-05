@@ -30,13 +30,13 @@
 
   function modTheme(m){
     var s=(m||"").toLowerCase();
-    if(s.indexOf("directa")>=0) return ["#0E6E78","#E2F0F1","#0A555D"];
-    if(s.indexOf("mínima")>=0||s.indexOf("minima")>=0) return ["#B98A28","#F3E8CE","#7A5C16"];
-    if(s.indexOf("licitaci")>=0) return ["#3457A6","#E4EAF7","#243f78"];
+    if(s.indexOf("licitaci")>=0) return ["#0E8A64","#DCF2E9","#0A5C44"];
+    if(s.indexOf("mínima")>=0||s.indexOf("minima")>=0) return ["#B9862B","#F6ECD4","#7A5C16"];
     if(s.indexOf("abreviada")>=0) return ["#7A4FB0","#EEE6F6","#553584"];
-    if(s.indexOf("méritos")>=0||s.indexOf("meritos")>=0) return ["#1E7A5A","#DDF0E7","#125640"];
-    if(s.indexOf("especial")>=0) return ["#B4452F","#F6E1DB","#822f1f"];
-    return ["#16314f","#E7ECF3","#0A1A2F"];
+    if(s.indexOf("méritos")>=0||s.indexOf("meritos")>=0) return ["#0E6E78","#DFF0F2","#0A555D"];
+    if(s.indexOf("subasta")>=0) return ["#3457A6","#E4EAF7","#243F78"];
+    if(s.indexOf("especial")>=0||s.indexOf("regimen")>=0||s.indexOf("régimen")>=0) return ["#B4452F","#F6E1DB","#822F1F"];
+    return ["#33413A","#E8ECE9","#1C2621"];
   }
 
   var COP=new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0});
@@ -91,6 +91,13 @@
   /* En este dataset: NIT entidad y NIT proveedor son TEXTO (coincidencia
      exacta con comillas); valor_total_adjudicacion es NÚMERO (comparación
      numérica). Los campos de texto libre usan lower()+like (contiene). */
+  /* El aplicativo excluye SIEMPRE la contratación directa. En el respaldo
+     sin lower(), '%irecta%' cubre "Directa" y "directa". */
+  function noDirecta(opts){
+    return "not ("+((opts&&opts.lower)
+      ? "lower("+F.modalidad+") like '%directa%'"
+      : F.modalidad+" like '%irecta%'")+")";
+  }
   function buildWhere(a, opts){
     if(!F) return "";
     var p=[];
@@ -125,14 +132,8 @@
     if(a.anio && F.fecha){ var yy=parseInt(a.anio,10);
       p.push(F.fecha+" >= '"+yy+"-01-01T00:00:00' and "+F.fecha+" < '"+(yy+1)+"-01-01T00:00:00'"); }
     if(a.recent && a.recentSince && F.fecha){   /* vista por defecto: último mes */
-      p.push(F.fecha+" >= '"+esc(a.recentSince)+"'");
-      if(F.modalidad){                          /* sin contratación directa */
-        /* en el respaldo sin lower(), '%irecta%' cubre "Directa" y "directa" */
-        p.push("not ("+(opts.lower
-          ? "lower("+F.modalidad+") like '%directa%'"
-          : F.modalidad+" like '%irecta%'")+")");
-      }
-    }
+      p.push(F.fecha+" >= '"+esc(a.recentSince)+"'"); }
+    if(F.modalidad){ p.push(noDirecta(opts)); } /* TODA consulta excluye la contratación directa */
     if(F.nitProv){                               /* excluir proveedores restringidos */
       BLOCKED_DOCS.forEach(function(doc){ p.push(F.nitProv+" != '"+esc(doc)+"'"); });
     }
@@ -317,16 +318,16 @@
     var loc=[ciudad,depto].filter(Boolean).join(", ");
     var provDef=(prov && prov!=="No Definido"), docDef=(docP && docP!=="No Definido");
 
-    var meta="";
-    if(nitE) meta+='<span><span class="k">NIT</span> '+escHtml(nitE)+'</span>';
-    if(loc)  meta+='<span>'+escHtml(loc)+'</span>';
-    if(ref)  meta+='<span><span class="k">Ref.</span> '+escHtml(ref)+'</span>';
+    var top='<div class="card-top">';
+    if(mod)            top+='<span class="tag mod">'+escHtml(mod)+'</span>';
+    if(isNuevo(fecha)) top+='<span class="tag new">Nuevo</span>';
+    top+='<span class="when">'+(fecha? 'Publicado · '+escHtml(fmtFecha(fecha)) : 'Sin fecha')+'</span></div>';
 
-    var chips="";
-    if(isNuevo(fecha)) chips+='<span class="chip new">Nuevo</span>';
-    if(mod)    chips+='<span class="chip mod">'+escHtml(mod)+'</span>';
-    if(estado) chips+='<span class="chip">'+escHtml(estado)+'</span>';
-    if(fecha)  chips+='<span class="chip date">Publicado · '+escHtml(fmtFecha(fecha))+'</span>';
+    var meta="";
+    if(nitE)   meta+='<span><span class="k">NIT</span> '+escHtml(nitE)+'</span>';
+    if(loc)    meta+='<span>'+escHtml(loc)+'</span>';
+    if(ref)    meta+='<span><span class="k">Ref.</span> '+escHtml(ref)+'</span>';
+    if(estado) meta+='<span><span class="k">Estado</span> '+escHtml(estado)+'</span>';
 
     var provHtml="";
     if(provDef){ provHtml='<div class="prov"><span class="plabel">Proveedor adjudicado</span>'+
@@ -340,21 +341,17 @@
 
     return ''+
     '<article class="card" style="--accent:'+accent+';--accent-soft:'+soft+';--accent-ink:'+aink+'">'+
-      '<div class="card-grid">'+
-        '<div class="card-main">'+
-          '<h2 class="ent">'+escHtml(ent||"Entidad no registrada")+'</h2>'+
-          (meta? '<div class="meta-line">'+meta+'</div>':'')+
-          (obj? '<p class="objeto">'+escHtml(obj)+'</p>':'')+
-          provHtml+
-          (chips? '<div class="chips">'+chips+'</div>':'')+
-        '</div>'+
-        '<div class="card-side">'+
-          '<div>'+
-            '<div class="valor-lbl">Valor total adjudicado</div>'+
-            '<div class="valor">'+((valNum!=null && !isNaN(valNum))? COP.format(valNum):'—')+'</div>'+
-            (year? '<div class="anio">Año · <b>'+year+'</b></div>':'')+
-          '</div>'+ verproc+
-        '</div>'+
+      top+
+      '<h2 class="ent">'+escHtml(ent||"Entidad no registrada")+'</h2>'+
+      (meta? '<div class="meta">'+meta+'</div>':'')+
+      (obj? '<p class="objeto">'+escHtml(obj)+'</p>':'')+
+      provHtml+
+      '<div class="card-foot">'+
+        '<div class="money">'+
+          '<span class="vlbl">Valor total adjudicado</span>'+
+          '<span class="valor">'+((valNum!=null && !isNaN(valNum))? COP.format(valNum):'—')+'</span>'+
+          (year? '<span class="anio">Año '+year+'</span>':'')+
+        '</div>'+ verproc+
       '</div>'+
     '</article>';
   }
@@ -371,7 +368,7 @@
     else { rcount.textContent=rows.length+" resultado"+(rows.length===1?'':'s'); }
     var hasF = active && (active.nitEnt||active.nomEnt||active.desc||active.ref||active.nitProv||active.nomProv||active.valorMin||active.mod||active.objeto||active.anio);
     rsub.textContent = isRecent? "Sin contratación directa · las más recientes primero · desde "+(fmtFecha(active.recentSince)||"hace un mes")
-      : (hasF? "Según los filtros aplicados" : "Mostrando una muestra del registro nacional");
+      : (hasF? "Según los filtros aplicados · sin contratación directa" : "Muestra del registro nacional · sin contratación directa");
 
     var html="";
     if(loading && rows.length===0){ for(var i=0;i<6;i++) html+='<div class="skel"></div>'; list.innerHTML=html; return; }
@@ -506,9 +503,16 @@
       F={};
       for(var k in FIELD_CANDIDATES) F[k]=pick(keys,FIELD_CANDIDATES[k]);
       setBtnLoading(false); setXlsBusy(false);
-      fetchT(API+"?$select="+encodeURIComponent("count(1) as cnt")).then(function(x){ return x.ok?x.json():null; })
-        .then(function(d){ if(d && d[0] && d[0].cnt!=null) $("total").textContent=NUM.format(Number(d[0].cnt)); })
-        .catch(function(){});
+      /* contador del encabezado: también sin contratación directa (con
+         respaldo al conteo simple si el servidor rechaza la cláusula) */
+      var cntUrl=API+"?$select="+encodeURIComponent("count(1) as cnt");
+      (F.modalidad
+        ? fetchT(cntUrl+"&$where="+encodeURIComponent(noDirecta({lower:true})))
+            .then(function(x){ if(!x.ok) throw new Error("HTTP "+x.status); return x.json(); })
+            .catch(function(){ return fetchT(cntUrl).then(function(x){ return x.ok?x.json():null; }); })
+        : fetchT(cntUrl).then(function(x){ return x.ok?x.json():null; })
+      ).then(function(d){ if(d && d[0] && d[0].cnt!=null) $("total").textContent=NUM.format(Number(d[0].cnt)); })
+       .catch(function(){});
       showRecent();
     })
     .catch(function(e){
