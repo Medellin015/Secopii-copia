@@ -439,7 +439,9 @@
     .then(function(){ if(id===reqId){ more=false; syncMore(); } });
   }
   function readForm(){
-    var vMin=$("f_valMin").value.trim(), vMax=$("f_valMax").value.trim();
+    /* los campos de valor se muestran como "$20.000.000"; para la consulta
+       se usan solo los dígitos */
+    var vMin=$("f_valMin").value.replace(/\D+/g,""), vMax=$("f_valMax").value.replace(/\D+/g,"");
     /* si el rango viene invertido, se corrige en silencio */
     if(vMin && vMax && Number(vMin)>Number(vMax)){ var t=vMin; vMin=vMax; vMax=t; }
     return {
@@ -481,11 +483,22 @@
   });
   $("btnXlsx").addEventListener("click", downloadExcel);
 
-  /* campos numéricos: solo dígitos (escritura y pegado) */
-  ["f_nitEnt","f_nitProv","f_valMin","f_valMax"].forEach(function(id){
+  /* NIT: solo dígitos, sin separadores (son identificadores, no cifras) */
+  ["f_nitEnt","f_nitProv"].forEach(function(id){
     $(id).addEventListener("input", function(){
       var clean=this.value.replace(/\D+/g,"");
       if(this.value!==clean) this.value=clean;
+    });
+  });
+  /* valor: se muestra como moneda mientras se escribe, p. ej. "$20.000.000".
+     Se agrupan los dígitos manualmente (sin Number) para no perder precisión
+     ni caer en notación científica con cifras muy grandes. El cursor se lleva
+     al final: es lo esperado al teclear una cifra de izquierda a derecha. */
+  function groupThousands(d){ return d.replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
+  ["f_valMin","f_valMax"].forEach(function(id){
+    $(id).addEventListener("input", function(){
+      var d=this.value.replace(/\D+/g,"");
+      this.value = d ? "$"+groupThousands(d) : "";
     });
   });
 
