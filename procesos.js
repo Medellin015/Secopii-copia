@@ -5,7 +5,7 @@
      Dataset: SECOP II - Procesos de Contratación (p6dx-8zbt).
      (El dataset 77td-mmia está vacío, por eso no se usa.) */
   var API = "https://www.datos.gov.co/resource/p6dx-8zbt.json";
-  var PAGE = 50;
+  var PAGE = 20;   /* 20 por página: respuesta más rápida; «Cargar más» trae los siguientes */
 
   /* documentos de proveedor restringidos (igual que en Contratos) */
   var BLOCKED_DOCS = ["1128272022"];
